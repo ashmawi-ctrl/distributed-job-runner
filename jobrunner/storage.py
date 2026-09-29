@@ -353,19 +353,28 @@ class QueueStore:
             cursor = connection.execute(
                 """
                 UPDATE jobs
-                SET status = ?,
+                SET status = CASE
+                        WHEN attempts >= max_attempts THEN ?
+                        ELSE ?
+                    END,
                     available_at = ?,
                     lease_owner = NULL,
                     lease_expires_at = NULL,
-                    last_error = ?,
+                    last_error = CASE
+                        WHEN attempts >= max_attempts
+                        THEN ?
+                        ELSE ?
+                    END,
                     updated_at = ?
                 WHERE status = ?
                   AND lease_expires_at IS NOT NULL
                   AND lease_expires_at <= ?
                 """,
                 (
+                    JobStatus.FAILED.value,
                     JobStatus.RETRY.value,
                     timestamp,
+                    "worker lease expired after final attempt",
                     "worker lease expired before completion",
                     timestamp,
                     JobStatus.PROCESSING.value,
